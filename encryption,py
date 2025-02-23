@@ -1,0 +1,131 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from PIL import Image
+import numpy as np
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
+import os
+
+class EncryptApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Steganography Encoder")
+        self.root.geometry("500x400")
+        
+        # Image selection
+        tk.Label(self.root, text="Step 1: Select Image", font=('Arial', 10, 'bold')).pack(pady=5)
+        self.image_btn = tk.Button(self.root, text="Choose Image", command=self.choose_image)
+        self.image_btn.pack()
+        
+       # Password input
+        tk.Label(self.root, text="Step 2: Enter Password", font=('Arial', 10, 'bold')).pack(pady=5)
+        self.password_entry = tk.Entry(self.root, show="*", width=30)
+        self.password_entry.pack()
+
+        # Message input
+        tk.Label(self.root, text="Step 3: Enter Secret Message", font=('Arial', 10, 'bold')).pack(pady=5)
+        self.message_text = tk.Text(self.root, height=4, width=30)
+        self.message_text.pack()
+        
+        # Encrypt button
+        tk.Label(self.root, text="Step 4: Encrypt and Save", font=('Arial', 10, 'bold')).pack(pady=5)
+        self.encrypt_btn = tk.Button(self.root, text="Encrypt Message", command=self.encrypt_message)
+        self.encrypt_btn.pack(pady=10)
+        
+        # Status
+        self.status_label = tk.Label(self.root, text="")
+        self.status_label.pack(pady=10)
+        
+        self.image_path = None
+        
+    def choose_image(self):
+        self.image_path = filedialog.askopenfilename(
+            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp")]
+        )
+        if self.image_path:
+            self.status_label.config(text=f"Selected: {os.path.basename(self.image_path)}")
+            
+    def get_encryption_key(self, password):
+        salt = b'salt_123'
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
+        return key
+    
+    def embed_bit(self, pixel, bit):
+        return (pixel & 0xFE) | bit
+    
+    def encrypt_message(self):
+        if not self.image_path:
+            messagebox.showerror("Error", "Please select an image first!")
+            return
+            
+        message = self.message_text.get("1.0", tk.END).strip()
+        password = self.password_entry.get()
+        
+        if not message or not password:
+            messagebox.showerror("Error", "Please enter both message and password!")
+            return
+            
+        try:
+            # Load and convert image
+            img = Image.open(self.image_path)
+            img_array = np.array(img, dtype=np.uint8)
+            
+            # Encrypt message
+            key = self.get_encryption_key(password)
+            f = Fernet(key)
+            encrypted_message = f.encrypt(message.encode())
+            
+            # Convert to binary
+            binary_message = ''.join(format(byte, '08b') for byte in encrypted_message)
+            
+            if len(binary_message) > img_array.size:
+                messagebox.showerror("Error", "Message too long for this image!")
+                return
+            
+            # Embed message length
+            length_binary = format(len(binary_message), '032b')
+            
+            # Create modified array
+            modified_array = img_array.copy()
+            idx = 0
+            
+            # Embed length
+            for i in range(32):
+                x = (idx // img_array.shape[1]) % img_array.shape[0]
+                y = idx % img_array.shape[1]
+                c = idx // (img_array.shape[0] * img_array.shape[1])
+                modified_array[x, y, c % 3] = self.embed_bit(modified_array[x, y, c % 3], int(length_binary[i]))
+                idx += 1
+            
+            # Embed message
+            for bit in binary_message:
+                x = (idx // img_array.shape[1]) % img_array.shape[0]
+                y = idx % img_array.shape[1]
+                c = idx // (img_array.shape[0] * img_array.shape[1])
+                modified_array[x, y, c % 3] = self.embed_bit(modified_array[x, y, c % 3], int(bit))
+                idx += 1
+            
+            # Save image
+            output_path = filedialog.asksaveasfilename(
+                defaultextension=".png",
+                filetypes=[("PNG files", "*.png")]
+            )
+            if output_path:
+                Image.fromarray(modified_array).save(output_path)
+                messagebox.showinfo("Success", "Message encrypted successfully!")
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"Encryption failed: {str(e)}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = EncryptApp(root)
+    root.mainloop()

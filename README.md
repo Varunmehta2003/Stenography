@@ -30,7 +30,7 @@ This project provides two Python applications for hiding secret messages within 
 
 ## Usage
 
-### Encryption (encrypt.py)
+### Encryption (encryption.py)
 
 1. Run the encryption program:
    ```bash
@@ -42,7 +42,7 @@ This project provides two Python applications for hiding secret messages within 
    - Step 3: Enter a password (remember this for decryption)
    - Step 4: Click "Encrypt Message" and choose where to save the encrypted image
 
-### Decryption (decrypt.py)
+### Decryption (decryption.py)
 
 1. Run the decryption program:
    ```bash
